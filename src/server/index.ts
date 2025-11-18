@@ -37,65 +37,97 @@ import DatabaseSeeder from './seeders/databaseSeeder.js';
 // Load environment variables
 dotenv.config();
 
+// Setup process error handlers
+setupProcessErrorHandlers();
+
 const app = express();
 const server = createServer(app);
-const io = new SocketIOServer(server, {
-  cors: {
-    origin: process.env.NODE_ENV === 'production'
-      ? process.env.FRONTEND_URL
-      : ['http://localhost:5173', 'http://localhost:3000'],
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
-});
-
 const PORT = process.env.PORT || 8000;
 
-// Global middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "wss:", "https:"],
-    },
-  },
-}));
+// Request ID middleware (should be first)
+app.use(requestIdMiddleware);
 
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.FRONTEND_URL
-    : ['http://localhost:5173', 'http://localhost:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: 'Too many requests from this IP, please try again later.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api', limiter);
+// Security middleware
+app.use(securityMiddleware);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check endpoint (protected in production)
+app.get('/health', protectHealthCheck, async (req, res) => {
+  try {
+    // Check database connection
+    await sequelize.authenticate();
+
+    const socketController = getSocketController();
+    const dbSeeder = DatabaseSeeder;
+
+    const healthStatus = {
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      version: process.env.npm_package_version || '1.0.0',
+      services: {
+        database: 'connected',
+        socketio: socketController ? 'running' : 'stopped',
+        pdfService: 'ready'
+      },
+      metrics: {
+        connectedUsers: socketController?.getConnectedUsersCount() || 0,
+        memoryUsage: process.memoryUsage(),
+        cpuUsage: process.cpuUsage()
+      },
+      endpoints: {
+        api: '/api',
+        auth: '/api/auth',
+        medications: '/api/medications',
+        health: '/api/health',
+        diet: '/api/diet'
+      }
+    };
+
+    res.status(200).json(healthStatus);
+  } catch (error) {
+    res.status(503).json({
+      status: 'ERROR',
+      timestamp: new Date().toISOString(),
+      error: 'Service unavailable',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Additional health check endpoints
+app.get('/health/ready', protectHealthCheck, async (req, res) => {
+  try {
+    // Check all critical services
+    await sequelize.authenticate();
+
+    res.status(200).json({
+      status: 'READY',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: 'connected',
+        server: 'ready'
+      }
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'NOT_READY',
+      timestamp: new Date().toISOString(),
+      error: 'Service not ready'
+    });
+  }
+});
+
+app.get('/health/live', (req, res) => {
+  // Basic liveness check - just return OK if server is running
   res.status(200).json({
-    status: 'OK',
+    status: 'LIVE',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
+    uptime: process.uptime()
   });
 });
 
