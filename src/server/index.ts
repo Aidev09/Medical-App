@@ -186,6 +186,13 @@ app.get('/api', (req, res) => {
       medications: '/api/medications',
       healthMetrics: '/api/health',
       diet: '/api/diet',
+      'ai-chat': '/api/ai-chat',
+      appointments: '/api/appointments',
+      telemedicine: '/api/telemedicine',
+      providers: '/api/providers',
+      billing: '/api/billing',
+      emergency: '/api/emergency',
+      pharmacy: '/api/pharmacy',
       documentation: '/docs'
     },
     documentation: 'https://api.medicalapp.com/docs'
