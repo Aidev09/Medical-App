@@ -147,6 +147,15 @@ app.use('/api/medications', medicationRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/diet', dietRoutes);
 
+// External API routes
+app.use('/api/ai-chat', aiChatRoutes);
+app.use('/api/appointments', appointmentRoutes);
+app.use('/api/telemedicine', telemedicineRoutes);
+app.use('/api/providers', providerRoutes);
+app.use('/api/billing', billingRoutes);
+app.use('/api/emergency', emergencyRoutes);
+app.use('/api/pharmacy', pharmacyRoutes);
+
 // Protected upload routes
 app.use('/api/upload', uploadLimiter, (req, res) => {
   res.status(501).json({ success: false, error: 'Upload endpoint not implemented yet' });
