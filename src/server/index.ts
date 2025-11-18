@@ -1,14 +1,9 @@
 import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
-import { Server as SocketIOServer } from 'socket.io';
-import { Op } from 'sequelize';
 import dotenv from 'dotenv';
 
 // Import database configuration
-import { connectDB } from './config/database.js';
+import { sequelize } from './config/database.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -17,13 +12,27 @@ import medicationRoutes from './routes/medicationRoutes.js';
 import healthRoutes from './routes/health.js';
 import dietRoutes from './routes/diet.js';
 
-// Import models for setup
-import { sequelize } from './models/index.js';
+// Import middleware
+import {
+  securityMiddleware,
+  authLimiter,
+  uploadLimiter,
+  reportLimiter,
+  protectHealthCheck
+} from './middleware/security.js';
+import {
+  errorHandler,
+  notFoundHandler,
+  requestIdMiddleware,
+  setupProcessErrorHandlers
+} from './middleware/errorHandler.js';
 
-// Socket.IO will be initialized when needed
-const initializeSocketIO = () => {
-  console.log('Socket.IO initialization placeholder');
-};
+// Import Socket.IO controller
+import { initializeSocket, getSocketController } from './controllers/socketController.js';
+
+// Import services
+import PDFService from './services/pdfService.js';
+import DatabaseSeeder from './seeders/databaseSeeder.js';
 
 // Load environment variables
 dotenv.config();
