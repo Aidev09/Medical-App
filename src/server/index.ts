@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import { Op } from 'sequelize';
 import dotenv from 'dotenv';
 
 // Import database configuration
