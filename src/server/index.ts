@@ -260,6 +260,13 @@ const startServer = async () => {
       console.log('  GET  /api/medications      - Get medications');
       console.log('  GET  /api/health/metrics   - Get health metrics');
       console.log('  GET  /api/diet/plans       - Get diet plans');
+      console.log('  POST /api/ai-chat/sessions - Start AI chat session');
+      console.log('  POST /api/appointments     - Book appointment');
+      console.log('  POST /api/telemedicine/sessions - Create telemedicine session');
+      console.log('  GET  /api/providers/search - Search healthcare providers');
+      console.log('  POST /api/billing/invoices - Create medical invoice');
+      console.log('  GET  /api/emergency/nearby - Find emergency services');
+      console.log('  GET  /api/pharmacy/nearby  - Find nearby pharmacies');
       console.log('');
     });
 
