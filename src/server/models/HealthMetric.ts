@@ -1,7 +1,8 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { DataTypes, Model, Sequelize, Op } from 'sequelize';
 
-export interface IHealthMetric extends Document {
-  user: mongoose.Types.ObjectId;
+export interface IHealthMetricAttributes {
+  id: number;
+  userId: number;
   type: 'bloodPressure' | 'weight' | 'heartRate' | 'bloodSugar' | 'temperature';
   value: number;
   unit: string;
@@ -17,11 +18,103 @@ export interface IHealthMetric extends Document {
   };
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface IHealthMetricCreationAttributes extends Omit<IHealthMetricAttributes, 'id' | 'createdAt' | 'updatedAt'> {}
+
+class HealthMetric extends Model<IHealthMetricAttributes, IHealthMetricCreationAttributes> implements IHealthMetricAttributes {
+  public id!: number;
+  public userId!: number;
+  public type!: 'bloodPressure' | 'weight' | 'heartRate' | 'bloodSugar' | 'temperature';
+  public value!: number;
+  public unit!: string;
+  public timestamp!: Date;
+  public notes?: string;
+  public source!: 'manual' | 'device' | 'automatic';
+  public metadata?: {
+    systolic?: number;
+    diastolic?: number;
+    position?: 'sitting' | 'standing' | 'lying';
+    device?: string;
+    location?: string;
+  };
+  public createdAt!: Date;
+  public updatedAt!: Date;
 
   // Instance methods
-  isWithinRange(): boolean;
-  getCategory(): 'low' | 'normal' | 'high' | 'critical';
-  getDisplayValue(): string;
+  public isWithinRange(): boolean {
+    return this.getCategory() === 'normal';
+  }
+
+  public getCategory(): 'low' | 'normal' | 'high' | 'critical' {
+    switch (this.type) {
+      case 'bloodPressure':
+        if (this.metadata?.systolic && this.metadata?.diastolic) {
+          const systolic = this.metadata.systolic;
+          const diastolic = this.metadata.diastolic;
+
+          if (systolic < 90 || diastolic < 60) return 'low';
+          if (systolic >= 180 || diastolic >= 120) return 'critical';
+          if (systolic >= 140 || diastolic >= 90) return 'high';
+          return 'normal';
+        }
+        return 'normal';
+
+      case 'weight':
+        // Weight categories depend on height, so we'll return normal by default
+        return 'normal';
+
+      case 'heartRate':
+        if (this.value < 60) return 'low';
+        if (this.value >= 120) return 'critical';
+        if (this.value >= 100) return 'high';
+        return 'normal';
+
+      case 'bloodSugar':
+        if (this.unit === 'mg/dL') {
+          if (this.value < 70) return 'low';
+          if (this.value >= 250) return 'critical';
+          if (this.value >= 126) return 'high';
+          return 'normal';
+        } else { // mmol/L
+          if (this.value < 3.9) return 'low';
+          if (this.value >= 13.9) return 'critical';
+          if (this.value >= 7.0) return 'high';
+          return 'normal';
+        }
+
+      case 'temperature':
+        if (this.unit === 'celsius') {
+          if (this.value < 35.0) return 'low';
+          if (this.value >= 40.0) return 'critical';
+          if (this.value >= 38.0) return 'high';
+          return 'normal';
+        } else { // fahrenheit
+          if (this.value < 95.0) return 'low';
+          if (this.value >= 104.0) return 'critical';
+          if (this.value >= 100.4) return 'high';
+          return 'normal';
+        }
+
+      default:
+        return 'normal';
+    }
+  }
+
+  public getDisplayValue(): string {
+    switch (this.type) {
+      case 'bloodPressure':
+        if (this.metadata?.systolic && this.metadata?.diastolic) {
+          return `${this.metadata.systolic}/${this.metadata.diastolic} ${this.unit}`;
+        }
+        return `${this.value} ${this.unit}`;
+
+      default:
+        return `${this.value} ${this.unit}`;
+    }
+  }
+
+  // Static methods will be added after model initialization
 }
 
 const HealthMetricSchema: Schema = new Schema({
