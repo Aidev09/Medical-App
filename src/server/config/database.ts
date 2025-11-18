@@ -1,52 +1,92 @@
-import mongoose from 'mongoose';
+import { Sequelize } from 'sequelize';
+import { config } from 'dotenv';
+
+config(); // Load environment variables
+
+const sequelize = new Sequelize({
+  database: process.env.DB_NAME || 'medical_app',
+  username: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'password',
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432'),
+  dialect: 'postgres',
+  logging: process.env.NODE_ENV === 'development' ? console.log : false,
+  pool: {
+    max: 10, // Maximum number of connection in pool
+    min: 0, // Minimum number of connection in pool
+    acquire: 30000, // Maximum time, in milliseconds, that a connection can be idle before being released
+    idle: 10000 // Maximum time, in milliseconds, that a connection can be idle before being released
+  },
+  dialectOptions: {
+    ssl: process.env.NODE_ENV === 'production' ? {
+      require: true,
+      rejectUnauthorized: false
+    } : false
+  }
+});
 
 const connectDB = async (): Promise<void> => {
   try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/medical-app';
+    await sequelize.authenticate();
+    console.log(`✅ PostgreSQL connected successfully`);
+    console.log(`📊 Database: ${sequelize.config.database}`);
+    console.log(`🌐 Host: ${sequelize.config.host}:${sequelize.config.port}`);
 
-    const options = {
-      maxPoolSize: 10, // Maintain up to 10 socket connections
-      serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
-      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-      bufferMaxEntries: 0, // Disable mongoose buffering
-      bufferCommands: false, // Disable mongoose buffering
-    };
-
-    if (process.env.NODE_ENV === 'production') {
-      // Production-specific options
-      options.retryWrites = true;
-      options.w = 'majority';
+    // Sync all models (in production, you might want to use migrations instead)
+    if (process.env.NODE_ENV !== 'production') {
+      await sequelize.sync({ alter: true });
+      console.log('🔄 Database synchronized');
     }
 
-    const conn = await mongoose.connect(mongoURI, options);
-
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-    console.log(`📊 Database: ${conn.connection.name}`);
-
     // Handle connection events
-    mongoose.connection.on('connected', () => {
-      console.log('🟢 Mongoose connected to MongoDB');
+    sequelize.addHook('beforeConnect', () => {
+      console.log('🟢 Attempting to connect to PostgreSQL...');
     });
 
-    mongoose.connection.on('error', (err) => {
-      console.error('🔴 Mongoose connection error:', err);
-    });
-
-    mongoose.connection.on('disconnected', () => {
-      console.log('🟡 Mongoose disconnected from MongoDB');
+    sequelize.addHook('afterConnect', () => {
+      console.log('🟢 PostgreSQL connection established');
     });
 
     // Graceful shutdown
     process.on('SIGINT', async () => {
-      await mongoose.connection.close();
-      console.log('🔴 MongoDB connection closed through app termination');
+      console.log('🔴 Closing PostgreSQL connection...');
+      await sequelize.close();
+      console.log('🔴 PostgreSQL connection closed');
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', async () => {
+      console.log('🔴 Closing PostgreSQL connection...');
+      await sequelize.close();
+      console.log('🔴 PostgreSQL connection closed');
       process.exit(0);
     });
 
   } catch (error) {
-    console.error('❌ MongoDB connection failed:', error);
+    console.error('❌ PostgreSQL connection failed:', error);
     process.exit(1);
   }
 };
 
-export { connectDB, mongoose };
+// Test connection function
+export const testConnection = async (): Promise<boolean> => {
+  try {
+    await sequelize.authenticate();
+    return true;
+  } catch (error) {
+    console.error('Database connection test failed:', error);
+    return false;
+  }
+};
+
+// Get database info
+export const getDatabaseInfo = () => {
+  return {
+    dialect: sequelize.getDialect(),
+    database: sequelize.config.database,
+    host: sequelize.config.host,
+    port: sequelize.config.port
+  };
+};
+
+export { sequelize, connectDB };
