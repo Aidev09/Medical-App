@@ -12,6 +12,15 @@ import medicationRoutes from './routes/medicationRoutes.js';
 import healthRoutes from './routes/health.js';
 import dietRoutes from './routes/diet.js';
 
+// Import external API routes
+import aiChatRoutes from './routes/aiChat.js';
+import appointmentRoutes from './routes/appointments.js';
+import telemedicineRoutes from './routes/telemedicine.js';
+import providerRoutes from './routes/providers.js';
+import billingRoutes from './routes/billing.js';
+import emergencyRoutes from './routes/emergency.js';
+import pharmacyRoutes from './routes/pharmacy.js';
+
 // Import middleware
 import {
   securityMiddleware,
