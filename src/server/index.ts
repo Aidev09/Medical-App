@@ -131,95 +131,155 @@ app.get('/health/live', (req, res) => {
   });
 });
 
-// API routes
-app.use('/api/auth', authRoutes);
+// API routes with specific rate limiters
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/medications', medicationRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/diet', dietRoutes);
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Route not found'
+// Protected upload routes
+app.use('/api/upload', uploadLimiter, (req, res) => {
+  res.status(501).json({ success: false, error: 'Upload endpoint not implemented yet' });
+});
+
+// Protected report generation routes
+app.use('/api/reports', reportLimiter, (req, res) => {
+  res.status(501).json({ success: false, error: 'Report endpoint not implemented yet' });
+});
+
+// API documentation endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Medical App API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      authentication: '/api/auth',
+      users: '/api/users',
+      medications: '/api/medications',
+      healthMetrics: '/api/health',
+      diet: '/api/diet',
+      documentation: '/docs'
+    },
+    documentation: 'https://api.medicalapp.com/docs'
   });
 });
 
-// Global error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Global error handler:', err);
+// 404 handler for undefined routes
+app.use('*', notFoundHandler);
 
-  // Sequelize validation errors
-  if (err.name === 'SequelizeValidationError' || err.name === 'SequelizeUniqueConstraintError') {
-    return res.status(400).json({
-      success: false,
-      error: 'Validation failed',
-      details: err.errors
-    });
-  }
+// Global error handler (must be last)
+app.use(errorHandler);
 
-  // JWT errors
-  if (err.name === 'JsonWebTokenError') {
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid token'
-    });
-  }
-
-  if (err.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      success: false,
-      error: 'Token expired'
-    });
-  }
-
-  // Default error
-  res.status(err.statusCode || 500).json({
-    success: false,
-    error: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
-});
-
-// Initialize Socket.IO
-initializeSocketIO(io);
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINT signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
-  });
-});
-
-// Start server
+// Initialize services and start server
 const startServer = async () => {
   try {
-    // Connect to database
-    await connectDB();
+    console.log('🚀 Starting Medical App Server...');
+
+    // Initialize database
+    console.log('📊 Connecting to database...');
+    await sequelize.authenticate();
+    console.log('✅ Database connected successfully');
+
+    // Sync database models
+    await sequelize.sync({ alter: true });
+    console.log('✅ Database models synchronized');
+
+    // Initialize PDF service
+    console.log('📄 Initializing PDF service...');
+    await PDFService.initialize();
+    console.log('✅ PDF service initialized');
+
+    // Initialize Socket.IO
+    console.log('🔌 Initializing Socket.IO...');
+    initializeSocket(server);
+    console.log('✅ Socket.IO initialized');
+
+    // Seed database in development or if explicitly requested
+    if (process.env.NODE_ENV === 'development' || process.env.SEED_DATABASE === 'true') {
+      console.log('🌱 Checking database seeding...');
+      await DatabaseSeeder.initialize();
+      const isSeeded = await DatabaseSeeder.checkIfSeeded();
+      if (!isSeeded) {
+        await DatabaseSeeder.seedAll();
+      } else {
+        console.log('📊 Database already seeded');
+      }
+    }
 
     // Start listening
     server.listen(PORT, () => {
+      console.log('');
+      console.log('🎉 Medical App Server Started Successfully!');
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Health check: http://localhost:${PORT}/health`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+      console.log(`📖 API docs: http://localhost:${PORT}/api`);
+      console.log('');
+      console.log('Available endpoints:');
+      console.log('  GET  /health              - Health check');
+      console.log('  GET  /health/ready         - Readiness check');
+      console.log('  GET  /health/live          - Liveness check');
+      console.log('  GET  /api                  - API overview');
+      console.log('  POST /api/auth/login       - User login');
+      console.log('  POST /api/auth/register    - User registration');
+      console.log('  GET  /api/medications      - Get medications');
+      console.log('  GET  /api/health/metrics   - Get health metrics');
+      console.log('  GET  /api/diet/plans       - Get diet plans');
+      console.log('');
     });
+
+    // Graceful shutdown handlers
+    const gracefulShutdown = async (signal: string) => {
+      console.log(`\n🔄 ${signal} received, starting graceful shutdown...`);
+
+      // Stop accepting new connections
+      server.close(async () => {
+        console.log('✅ HTTP server closed');
+
+        try {
+          // Shutdown Socket.IO
+          const socketController = getSocketController();
+          if (socketController) {
+            socketController.shutdown();
+            console.log('✅ Socket.IO shutdown complete');
+          }
+
+          // Close PDF service
+          await PDFService.cleanup();
+          console.log('✅ PDF service cleanup complete');
+
+          // Close database connection
+          await sequelize.close();
+          console.log('✅ Database connection closed');
+
+          console.log('🎉 Graceful shutdown completed');
+          process.exit(0);
+        } catch (error) {
+          console.error('❌ Error during shutdown:', error);
+          process.exit(1);
+        }
+      });
+
+      // Force shutdown after 30 seconds
+      setTimeout(() => {
+        console.error('❌ Forced shutdown due to timeout');
+        process.exit(1);
+      }, 30000);
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 };
 
+// Start the server
 startServer();
 
 export default app;
