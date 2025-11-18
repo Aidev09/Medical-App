@@ -93,7 +93,14 @@ app.get('/health', protectHealthCheck, async (req, res) => {
         auth: '/api/auth',
         medications: '/api/medications',
         health: '/api/health',
-        diet: '/api/diet'
+        diet: '/api/diet',
+        'ai-chat': '/api/ai-chat',
+        appointments: '/api/appointments',
+        telemedicine: '/api/telemedicine',
+        providers: '/api/providers',
+        billing: '/api/billing',
+        emergency: '/api/emergency',
+        pharmacy: '/api/pharmacy'
       }
     };
 
