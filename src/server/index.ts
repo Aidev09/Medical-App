@@ -12,12 +12,17 @@ import { connectDB } from './config/database.js';
 // Import routes
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
-import medicationRoutes from './routes/medications.js';
+import medicationRoutes from './routes/medicationRoutes.js';
 import healthRoutes from './routes/health.js';
 import dietRoutes from './routes/diet.js';
 
-// Import Socket.IO controller
-import { initializeSocketIO } from './controllers/socketController.js';
+// Import models for setup
+import { sequelize } from './models/index.js';
+
+// Socket.IO will be initialized when needed
+const initializeSocketIO = () => {
+  console.log('Socket.IO initialization placeholder');
+};
 
 // Load environment variables
 dotenv.config();
